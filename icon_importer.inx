@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+  <name>Search and Import Icons</name>
+  <id>com.wintondiaz.inkscape.icon-importer</id>
+
+  <dependency type="executable" location="inx" interpreter="python">icon_importer_extension.py</dependency>
+
+  <effect implements-custom-gui="true" needs-live-preview="false">
+    <object-type>all</object-type>
+    <effects-menu>
+      <submenu name="Import/Export"/>
+    </effects-menu>
+    <menu-tip>Search Iconify collections and import one or more SVG or PNG icons.</menu-tip>
+    <icon>iconify_search_icon.svg</icon>
+  </effect>
+
+  <script>
+    <command location="inx" interpreter="python">icon_importer_extension.py</command>
+  </script>
+</inkscape-extension>
