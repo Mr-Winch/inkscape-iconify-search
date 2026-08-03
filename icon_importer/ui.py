@@ -563,12 +563,35 @@ class IconBrowserDialog(Gtk.Dialog):
             self.favorites_box.pack_start(empty, False, False, 0)
 
         for section in sections:
-            expander = Gtk.Expander(
-                label=f'{section["name"]}  ({len(section["icons"])})'
+            expander = Gtk.Expander()
+            header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+            section_name = Gtk.Label(label=section["name"])
+            section_name.set_xalign(0)
+            section_name.set_ellipsize(Pango.EllipsizeMode.END)
+            section_name.set_tooltip_text(
+                "Show all icons in this section and expand or collapse it"
             )
+            header.pack_start(section_name, True, True, 0)
+            section_count = Gtk.Label(label=str(len(section["icons"])))
+            section_count.get_style_context().add_class("dim-label")
+            header.pack_start(section_count, False, False, 0)
+            delete_section = Gtk.Button.new_from_icon_name(
+                "user-trash-symbolic", Gtk.IconSize.MENU
+            )
+            delete_section.set_relief(Gtk.ReliefStyle.NONE)
+            delete_section.set_tooltip_text("Delete this favorites section")
+            delete_section.connect(
+                "clicked", self._delete_favorite_section,
+                section["id"], section["name"]
+            )
+            header.pack_start(delete_section, False, False, 0)
+            expander.set_label_widget(header)
             expander.set_expanded(section["id"] in self.open_favorite_sections)
             expander.connect(
                 "notify::expanded", self._on_favorite_expanded, section["id"]
+            )
+            expander.connect(
+                "activate", self._open_favorite_section, section["id"]
             )
             section_box = Gtk.Box(
                 orientation=Gtk.Orientation.VERTICAL, spacing=4
@@ -595,9 +618,7 @@ class IconBrowserDialog(Gtk.Dialog):
                     "clicked", self._open_favorite_icon, full_name
                 )
                 row.pack_start(open_button, True, True, 0)
-                remove_button = Gtk.Button.new_from_icon_name(
-                    "edit-delete-symbolic", Gtk.IconSize.MENU
-                )
+                remove_button = Gtk.Button(label="×")
                 remove_button.set_relief(Gtk.ReliefStyle.NONE)
                 remove_button.set_tooltip_text("Remove this icon")
                 remove_button.connect(
@@ -607,14 +628,6 @@ class IconBrowserDialog(Gtk.Dialog):
                 row.pack_start(remove_button, False, False, 0)
                 section_box.pack_start(row, False, False, 0)
 
-            delete_button = Gtk.Button(label="Delete section")
-            delete_button.set_halign(Gtk.Align.START)
-            delete_button.set_margin_top(4)
-            delete_button.connect(
-                "clicked", self._delete_favorite_section,
-                section["id"], section["name"]
-            )
-            section_box.pack_start(delete_button, False, False, 0)
             expander.add(section_box)
             self.favorites_box.pack_start(expander, False, False, 0)
 
@@ -686,7 +699,6 @@ class IconBrowserDialog(Gtk.Dialog):
                 self.favorites = add_icon(
                     self.favorites, section_id, icon.full_name
                 )
-                self.open_favorite_sections.add(section_id)
                 self._favorites_changed()
             else:
                 warning = Gtk.MessageDialog(
@@ -719,7 +731,6 @@ class IconBrowserDialog(Gtk.Dialog):
 
     def _remove_favorite_icon(self, _button, section_id, full_name):
         self.favorites = remove_icon(self.favorites, section_id, full_name)
-        self.open_favorite_sections.add(section_id)
         self._favorites_changed()
 
     def _delete_favorite_section(self, _button, section_id, section_name):
@@ -737,14 +748,42 @@ class IconBrowserDialog(Gtk.Dialog):
             self.open_favorite_sections.discard(section_id)
             self._favorites_changed()
 
-    def _open_favorite_icon(self, _button, full_name):
+    def _favorite_icon_info(self, full_name):
         if ":" not in full_name:
-            return
+            return None
         prefix, name = full_name.split(":", 1)
         collection = self.collections_by_prefix.get(prefix)
         if collection is None:
             collection = CollectionInfo(prefix=prefix, name=prefix)
-        icon = IconInfo(full_name, prefix, name, collection)
+        return IconInfo(full_name, prefix, name, collection)
+
+    def _open_favorite_section(self, _expander, section_id):
+        section = next(
+            (item for item in self.favorites["sections"]
+             if item["id"] == section_id),
+            None,
+        )
+        if section is None:
+            return
+        icons = tuple(
+            icon for icon in (
+                self._favorite_icon_info(name) for name in section["icons"]
+            ) if icon is not None
+        )
+        self.search_serial += 1
+        serial = self.search_serial
+        collections = {icon.prefix: icon.collection for icon in icons}
+        result = SearchResult(
+            icons, len(icons), 0, max(120, len(icons) + 1), collections
+        )
+        self._render_results(result, serial)
+
+    def _open_favorite_icon(self, _button, full_name):
+        icon = self._favorite_icon_info(full_name)
+        if icon is None:
+            return
+        prefix = icon.prefix
+        collection = icon.collection
         self.search_serial += 1
         serial = self.search_serial
         result = SearchResult((icon,), 1, 0, 120, {prefix: collection})

@@ -69,7 +69,7 @@ specific icon categories when available. Click an icon to select it; click it ag
 to unselect it. **Clear selection** deselects everything. Selected icons are
 imported together in a centered, non-overlapping grid.
 
-Use the star beside a result to add it to Favorites. Choose an existing section or enter a new section name in the dialog. The Favorites tab keeps sections as accordions; click a saved icon to display and select it for import, or use the delete controls to remove individual icons and complete sections. Favorites and the active sidebar tab persist after Inkscape closes.
+Use the star beside a result to add it to Favorites. Choose an existing section or enter a new section name in the dialog. The Favorites tab keeps sections collapsed by default. Click a section header to display all its icons and expand or collapse it; use the header trashcan to delete a section, or the X on an icon to remove only that favorite. Click an individual saved icon to display and select it for import. Favorites and the active sidebar tab persist after Inkscape closes.
 
 The SVG/PNG switch controls the import type:
 
