@@ -24,10 +24,12 @@ class ExtensionIdentityTests(unittest.TestCase):
     def test_installer_and_zip_include_icon(self):
         installer = (ROOT / "install.cmd").read_text(encoding="utf-8")
         self.assertGreaterEqual(installer.count("iconify_search_icon.svg"), 2)
+        self.assertGreaterEqual(installer.count("favorites.py"), 2)
         with tempfile.TemporaryDirectory() as directory:
             archive_path = build(Path(directory) / "extension.zip")
             with ZipFile(archive_path) as archive:
                 self.assertIn("iconify_search_icon.svg", archive.namelist())
+                self.assertIn("icon_importer/favorites.py", archive.namelist())
 
 
 if __name__ == "__main__":

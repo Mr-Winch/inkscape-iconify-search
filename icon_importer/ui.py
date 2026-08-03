@@ -16,6 +16,15 @@ gi.require_version("Pango", "1.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # noqa: E402
 
 from .api import IconifyClient
+from .favorites import (
+    add_icon,
+    contains_icon,
+    create_section,
+    icon_count,
+    normalize_favorites,
+    remove_icon,
+    remove_section,
+)
 from .models import CollectionInfo, IconInfo, ImportChoice, SearchResult
 from .svg import classify_svg_style
 
@@ -31,6 +40,9 @@ class IconBrowserDialog(Gtk.Dialog):
         self.collections = ()
         self.collections_by_prefix = {}
         self.ui_state = self._load_ui_state()
+        self.favorites = normalize_favorites(self.ui_state.get("favorites"))
+        self.favorite_buttons = {}
+        self.open_favorite_sections = set()
         collection_state = self.ui_state.get("collections", {})
         prefixes = collection_state.get("prefixes", ())
         if not isinstance(prefixes, (list, tuple, set)):
@@ -66,7 +78,10 @@ class IconBrowserDialog(Gtk.Dialog):
         self.restoring_state = False
         self.connect("destroy", self._on_destroy)
         self.show_all()
-        self.sidebar_stack.set_visible_child_name("filters")
+        active_page = str(self.ui_state.get("active_page") or "filters")
+        if active_page not in {"collections", "filters", "favorites"}:
+            active_page = "filters"
+        self.sidebar_stack.set_visible_child_name(active_page)
         self._update_format_controls()
         self._load_catalog()
         self.search_entry.grab_focus()
@@ -139,6 +154,7 @@ class IconBrowserDialog(Gtk.Dialog):
           border-color: #2f80ed;
         }
         .icon-tile { padding: 4px; }
+        .favorite-star { padding: 0 3px; min-width: 20px; min-height: 20px; }
         .icon-grid { background-color: shade(@theme_bg_color, 0.96); }
         .section-separator {
           background-color: alpha(@theme_fg_color, 0.14);
@@ -161,12 +177,13 @@ class IconBrowserDialog(Gtk.Dialog):
         cache = getattr(self.client, "cache", None)
         stored = cache.get_setting("ui_state", {}) if cache is not None else {}
         if not isinstance(stored, dict):
-            return {"filters": {}, "collections": {}}
+            return {"filters": {}, "collections": {}, "favorites": {"sections": []}}
         state = dict(stored)
         if not isinstance(state.get("filters"), dict):
             state["filters"] = {}
         if not isinstance(state.get("collections"), dict):
             state["collections"] = {}
+        state["favorites"] = normalize_favorites(state.get("favorites"))
         return state
 
     def _state_int(self, key, default, minimum, maximum):
@@ -211,6 +228,11 @@ class IconBrowserDialog(Gtk.Dialog):
                 "use_all": self.use_all_collections,
                 "prefixes": sorted(self.selected_prefixes),
             },
+            "favorites": normalize_favorites(self.favorites),
+            "active_page": (
+                self.sidebar_stack.get_visible_child_name()
+                if hasattr(self, "sidebar_stack") else "filters"
+            ),
         }
         self.ui_state = state
         cache.put_setting("ui_state", state)
@@ -323,15 +345,23 @@ class IconBrowserDialog(Gtk.Dialog):
 
         self.collections_page = self._build_collections_page()
         self.filters_page = self._build_filters_page()
+        self.favorites_page = self._build_favorites_page()
         self.sidebar_stack.add_titled(
             self.collections_page, "collections", "Collections"
         )
         self.sidebar_stack.add_titled(
             self.filters_page, "filters", "Filters"
         )
+        self.sidebar_stack.add_titled(
+            self.favorites_page, "favorites", "Favorites"
+        )
         self.sidebar_stack.set_visible_child_name("filters")
+        self.sidebar_stack.connect(
+            "notify::visible-child-name", self._on_sidebar_page_changed
+        )
         sidebar.pack_start(self.sidebar_stack, True, True, 0)
         self._update_filter_marker()
+        self._update_favorites_marker()
         return sidebar
 
     def _build_collections_page(self):
@@ -493,6 +523,235 @@ class IconBrowserDialog(Gtk.Dialog):
         self._setup_completion()
         scroll.add_with_viewport(page)
         return scroll
+
+    def _build_favorites_page(self):
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.favorites_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=10
+        )
+        self.favorites_box.set_border_width(12)
+        scroll.add(self.favorites_box)
+        self._render_favorites_page()
+        return scroll
+
+    def _render_favorites_page(self):
+        if not hasattr(self, "favorites_box"):
+            return
+        for child in self.favorites_box.get_children():
+            self.favorites_box.remove(child)
+
+        heading = Gtk.Label(label="Favorite icons")
+        heading.set_xalign(0)
+        heading.get_style_context().add_class("section-title")
+        self.favorites_box.pack_start(heading, False, False, 0)
+
+        help_label = Gtk.Label(
+            label="Use the star on any search result to add it to a section."
+        )
+        help_label.set_xalign(0)
+        help_label.set_line_wrap(True)
+        help_label.get_style_context().add_class("dim-label")
+        self.favorites_box.pack_start(help_label, False, False, 0)
+
+        sections = self.favorites["sections"]
+        if not sections:
+            empty = Gtk.Label(label="No favorites saved yet")
+            empty.set_xalign(0)
+            empty.set_margin_top(8)
+            empty.get_style_context().add_class("dim-label")
+            self.favorites_box.pack_start(empty, False, False, 0)
+
+        for section in sections:
+            expander = Gtk.Expander(
+                label=f'{section["name"]}  ({len(section["icons"])})'
+            )
+            expander.set_expanded(section["id"] in self.open_favorite_sections)
+            expander.connect(
+                "notify::expanded", self._on_favorite_expanded, section["id"]
+            )
+            section_box = Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL, spacing=4
+            )
+            section_box.set_margin_start(8)
+            section_box.set_margin_top(6)
+            section_box.set_margin_bottom(6)
+
+            if not section["icons"]:
+                empty_section = Gtk.Label(label="This section is empty")
+                empty_section.set_xalign(0)
+                empty_section.get_style_context().add_class("dim-label")
+                section_box.pack_start(empty_section, False, False, 4)
+
+            for full_name in section["icons"]:
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+                open_button = Gtk.Button(label=full_name)
+                open_button.set_relief(Gtk.ReliefStyle.NONE)
+                open_button.set_halign(Gtk.Align.FILL)
+                open_button.set_hexpand(True)
+                open_button.get_child().set_xalign(0)
+                open_button.set_tooltip_text("Show and select this icon")
+                open_button.connect(
+                    "clicked", self._open_favorite_icon, full_name
+                )
+                row.pack_start(open_button, True, True, 0)
+                remove_button = Gtk.Button.new_from_icon_name(
+                    "edit-delete-symbolic", Gtk.IconSize.MENU
+                )
+                remove_button.set_relief(Gtk.ReliefStyle.NONE)
+                remove_button.set_tooltip_text("Remove this icon")
+                remove_button.connect(
+                    "clicked", self._remove_favorite_icon,
+                    section["id"], full_name
+                )
+                row.pack_start(remove_button, False, False, 0)
+                section_box.pack_start(row, False, False, 0)
+
+            delete_button = Gtk.Button(label="Delete section")
+            delete_button.set_halign(Gtk.Align.START)
+            delete_button.set_margin_top(4)
+            delete_button.connect(
+                "clicked", self._delete_favorite_section,
+                section["id"], section["name"]
+            )
+            section_box.pack_start(delete_button, False, False, 0)
+            expander.add(section_box)
+            self.favorites_box.pack_start(expander, False, False, 0)
+
+        self.favorites_box.show_all()
+        self._update_favorites_marker()
+
+    def _on_sidebar_page_changed(self, *_args):
+        self._save_ui_state()
+
+    def _update_favorites_marker(self):
+        if not hasattr(self, "favorites_page"):
+            return
+        count = icon_count(self.favorites)
+        title = f"Favorites  {count}" if count else "Favorites"
+        self.sidebar_stack.child_set_property(
+            self.favorites_page, "title", title
+        )
+
+    def _on_favorite_expanded(self, expander, _property, section_id):
+        if expander.get_expanded():
+            self.open_favorite_sections.add(section_id)
+        else:
+            self.open_favorite_sections.discard(section_id)
+
+    def _on_add_favorite_clicked(self, _button, icon):
+        dialog = Gtk.Dialog(
+            title="Add to favorites", transient_for=self,
+            modal=True, destroy_with_parent=True
+        )
+        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
+        save_button = dialog.add_button("_Save", Gtk.ResponseType.OK)
+        save_button.get_style_context().add_class("primary-action")
+        content = dialog.get_content_area()
+        content.set_border_width(16)
+        content.set_spacing(10)
+
+        prompt = Gtk.Label(label=f"Save {icon.full_name} in:")
+        prompt.set_xalign(0)
+        content.pack_start(prompt, False, False, 0)
+
+        section_combo = Gtk.ComboBoxText()
+        for section in self.favorites["sections"]:
+            section_combo.append(section["id"], section["name"])
+        if self.favorites["sections"]:
+            section_combo.set_active(0)
+        else:
+            section_combo.set_sensitive(False)
+        content.pack_start(section_combo, False, False, 0)
+
+        separator = Gtk.Label(label="or create a new section")
+        separator.set_xalign(0)
+        separator.get_style_context().add_class("dim-label")
+        content.pack_start(separator, False, False, 0)
+        new_section = Gtk.Entry()
+        new_section.set_placeholder_text("New section name")
+        new_section.set_activates_default(True)
+        content.pack_start(new_section, False, False, 0)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        dialog.show_all()
+
+        if dialog.run() == Gtk.ResponseType.OK:
+            section_name = new_section.get_text().strip()
+            section_id = section_combo.get_active_id()
+            if section_name:
+                self.favorites, section_id = create_section(
+                    self.favorites, section_name
+                )
+            if section_id:
+                self.favorites = add_icon(
+                    self.favorites, section_id, icon.full_name
+                )
+                self.open_favorite_sections.add(section_id)
+                self._favorites_changed()
+            else:
+                warning = Gtk.MessageDialog(
+                    transient_for=self, modal=True,
+                    message_type=Gtk.MessageType.INFO,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Enter a name for the new section.",
+                )
+                warning.run()
+                warning.destroy()
+        dialog.destroy()
+
+    def _favorites_changed(self):
+        self._save_ui_state()
+        self._render_favorites_page()
+        self._refresh_favorite_buttons()
+
+    def _refresh_favorite_buttons(self):
+        for full_name, buttons in tuple(self.favorite_buttons.items()):
+            label = "★" if contains_icon(self.favorites, full_name) else "☆"
+            live_buttons = []
+            for button in buttons:
+                if button.get_parent() is not None:
+                    button.set_label(label)
+                    live_buttons.append(button)
+            if live_buttons:
+                self.favorite_buttons[full_name] = live_buttons
+            else:
+                self.favorite_buttons.pop(full_name, None)
+
+    def _remove_favorite_icon(self, _button, section_id, full_name):
+        self.favorites = remove_icon(self.favorites, section_id, full_name)
+        self.open_favorite_sections.add(section_id)
+        self._favorites_changed()
+
+    def _delete_favorite_section(self, _button, section_id, section_name):
+        confirm = Gtk.MessageDialog(
+            transient_for=self, modal=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.CANCEL,
+            text=f'Delete the section “{section_name}”?',
+        )
+        confirm.add_button("_Delete", Gtk.ResponseType.OK)
+        response = confirm.run()
+        confirm.destroy()
+        if response == Gtk.ResponseType.OK:
+            self.favorites = remove_section(self.favorites, section_id)
+            self.open_favorite_sections.discard(section_id)
+            self._favorites_changed()
+
+    def _open_favorite_icon(self, _button, full_name):
+        if ":" not in full_name:
+            return
+        prefix, name = full_name.split(":", 1)
+        collection = self.collections_by_prefix.get(prefix)
+        if collection is None:
+            collection = CollectionInfo(prefix=prefix, name=prefix)
+        icon = IconInfo(full_name, prefix, name, collection)
+        self.search_serial += 1
+        serial = self.search_serial
+        result = SearchResult((icon,), 1, 0, 120, {prefix: collection})
+        self._render_results(result, serial)
+        children = self.flowbox.get_children()
+        if children:
+            self.flowbox.select_child(children[0])
 
     @staticmethod
     def _field(label_text, widget):
@@ -1160,7 +1419,25 @@ class IconBrowserDialog(Gtk.Dialog):
             label.set_max_width_chars(10)
             label.set_tooltip_text(icon.full_name)
             tile.pack_start(image, True, True, 0)
-            tile.pack_start(label, False, False, 0)
+            label_row = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL, spacing=2
+            )
+            label_row.pack_start(label, True, True, 0)
+            favorite_button = Gtk.Button(
+                label="★" if contains_icon(self.favorites, icon.full_name)
+                else "☆"
+            )
+            favorite_button.set_relief(Gtk.ReliefStyle.NONE)
+            favorite_button.set_tooltip_text("Add to favorites")
+            favorite_button.get_style_context().add_class("favorite-star")
+            favorite_button.connect(
+                "clicked", self._on_add_favorite_clicked, icon
+            )
+            self.favorite_buttons.setdefault(icon.full_name, []).append(
+                favorite_button
+            )
+            label_row.pack_start(favorite_button, False, False, 0)
+            tile.pack_start(label_row, False, False, 0)
             click_target = Gtk.EventBox()
             click_target.set_visible_window(False)
             click_target.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
@@ -1247,6 +1524,7 @@ class IconBrowserDialog(Gtk.Dialog):
     def _clear_results(self):
         self.selected_icon = None
         self.visible_result_count = 0
+        self.favorite_buttons = {}
         self.flowbox.unselect_all()
         for child in self.flowbox.get_children():
             self.flowbox.remove(child)

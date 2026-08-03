@@ -12,7 +12,7 @@ echo  --------------------------
 echo.
 
 for %%F in (icon_importer.inx icon_importer_extension.py iconify_search_icon.svg README.md LICENSE) do if not exist "%SOURCE%%%F" goto missing
-for %%F in (__init__.py api.py cache.py models.py svg.py ui.py) do if not exist "%PACKAGE_SOURCE%\%%F" goto missing
+for %%F in (__init__.py api.py cache.py favorites.py models.py svg.py ui.py) do if not exist "%PACKAGE_SOURCE%\%%F" goto missing
 
 if not exist "%TARGET%" mkdir "%TARGET%"
 if errorlevel 1 goto failed
@@ -24,7 +24,7 @@ for %%F in (icon_importer.inx icon_importer_extension.py iconify_search_icon.svg
   if errorlevel 1 goto failed
 )
 
-for %%F in (__init__.py api.py cache.py models.py svg.py ui.py) do (
+for %%F in (__init__.py api.py cache.py favorites.py models.py svg.py ui.py) do (
   copy /Y "%PACKAGE_SOURCE%\%%F" "%PACKAGE_TARGET%\%%F" >nul
   if errorlevel 1 goto failed
 )

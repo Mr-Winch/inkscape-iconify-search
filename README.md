@@ -9,6 +9,7 @@ current Inkscape document as editable SVG or embedded PNG.
   at the time of this release; the count updates automatically)
 - Search all collections or any combination of selected collections
 - Click icons to select or unselect them, then import the selection as an arranged grid
+- Persistent favorites organized into named accordion sections, with per-icon and per-section deletion
 - Filter by collection category, palette, license, grid size, icon style, and a
   collection's own icon categories
 - Iconify keyword suggestions, similar-name matching, result limit, start offset,
@@ -67,6 +68,8 @@ collections and filters; selecting one collection also enables its collection-
 specific icon categories when available. Click an icon to select it; click it again
 to unselect it. **Clear selection** deselects everything. Selected icons are
 imported together in a centered, non-overlapping grid.
+
+Use the star beside a result to add it to Favorites. Choose an existing section or enter a new section name in the dialog. The Favorites tab keeps sections as accordions; click a saved icon to display and select it for import, or use the delete controls to remove individual icons and complete sections. Favorites and the active sidebar tab persist after Inkscape closes.
 
 The SVG/PNG switch controls the import type:
 
