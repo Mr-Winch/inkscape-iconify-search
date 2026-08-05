@@ -372,22 +372,81 @@ class IconifyClient:
         if self._windows_context_attempted:
             return self._windows_context
         self._windows_context_attempted = True
-        if os.name != "nt" or not hasattr(ssl, "enum_certificates"):
+        if os.name != "nt":
             return None
         try:
-            pem_certificates: list[str] = []
-            for store_name in ("ROOT", "CA"):
-                for certificate, encoding, _trust in ssl.enum_certificates(store_name):
-                    if encoding == "x509_asn":
-                        pem_certificates.append(ssl.DER_cert_to_PEM_cert(certificate))
-            if not pem_certificates:
+            certificates: list[bytes] = []
+            enum_certificates = getattr(ssl, "enum_certificates", None)
+            if callable(enum_certificates):
+                for store_name in ("ROOT", "CA"):
+                    certificates.extend(
+                        certificate
+                        for certificate, encoding, _trust
+                        in enum_certificates(store_name)
+                        if encoding == "x509_asn"
+                    )
+            else:
+                certificates.extend(self._windows_certificates_via_cryptoapi())
+            if not certificates:
                 return None
             context = ssl.create_default_context()
-            context.load_verify_locations(cadata="".join(pem_certificates))
+            context.load_verify_locations(cadata="".join(
+                ssl.DER_cert_to_PEM_cert(certificate)
+                for certificate in certificates
+            ))
             self._windows_context = context
-        except (OSError, ssl.SSLError):
+        except (AttributeError, OSError, ValueError, ssl.SSLError):
             self._windows_context = None
         return self._windows_context
+
+    @staticmethod
+    def _windows_certificates_via_cryptoapi() -> tuple[bytes, ...]:
+        """Read trusted certificates when MinGW Python lacks ssl.enum_certificates."""
+        import ctypes
+
+        class CertContext(ctypes.Structure):
+            _fields_ = [
+                ("encoding_type", ctypes.c_uint32),
+                ("encoded", ctypes.POINTER(ctypes.c_ubyte)),
+                ("encoded_size", ctypes.c_uint32),
+                ("cert_info", ctypes.c_void_p),
+                ("cert_store", ctypes.c_void_p),
+            ]
+
+        context_pointer = ctypes.POINTER(CertContext)
+        crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
+        crypt32.CertOpenSystemStoreW.argtypes = [
+            ctypes.c_void_p, ctypes.c_wchar_p
+        ]
+        crypt32.CertOpenSystemStoreW.restype = ctypes.c_void_p
+        crypt32.CertEnumCertificatesInStore.argtypes = [
+            ctypes.c_void_p, context_pointer
+        ]
+        crypt32.CertEnumCertificatesInStore.restype = context_pointer
+        crypt32.CertCloseStore.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        crypt32.CertCloseStore.restype = ctypes.c_bool
+
+        certificates: list[bytes] = []
+        for store_name in ("ROOT", "CA"):
+            store = crypt32.CertOpenSystemStoreW(None, store_name)
+            if not store:
+                continue
+            try:
+                previous = context_pointer()
+                while True:
+                    current = crypt32.CertEnumCertificatesInStore(
+                        store, previous
+                    )
+                    if not current:
+                        break
+                    certificates.append(ctypes.string_at(
+                        current.contents.encoded,
+                        current.contents.encoded_size,
+                    ))
+                    previous = current
+            finally:
+                crypt32.CertCloseStore(store, 0)
+        return tuple(certificates)
 
     def _validate_download_size(self, data: bytes) -> bytes:
         if len(data) > self.MAX_RESPONSE_BYTES:

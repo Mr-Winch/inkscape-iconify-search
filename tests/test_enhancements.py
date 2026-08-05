@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import ssl
 import unittest
+from unittest import mock
 import urllib.error
 
 from icon_importer.api import IconifyClient
@@ -100,6 +101,30 @@ class EnhancedApiTests(unittest.TestCase):
         client = CertificateFallbackClient()
         self.assertEqual(client._download("https://api.iconify.design"), b"secure fallback")
         self.assertTrue(client.curl_used)
+
+    def test_windows_context_uses_cryptoapi_when_ssl_api_is_missing(self):
+        client = IconifyClient()
+        fake_context = mock.Mock()
+        with (
+            mock.patch("icon_importer.api.os.name", "nt"),
+            mock.patch.object(ssl, "enum_certificates", None, create=True),
+            mock.patch.object(
+                client,
+                "_windows_certificates_via_cryptoapi",
+                return_value=(b"certificate",),
+            ) as cryptoapi,
+            mock.patch(
+                "icon_importer.api.ssl.DER_cert_to_PEM_cert",
+                return_value="PEM",
+            ),
+            mock.patch(
+                "icon_importer.api.ssl.create_default_context",
+                return_value=fake_context,
+            ),
+        ):
+            self.assertIs(client._get_windows_trust_context(), fake_context)
+        cryptoapi.assert_called_once_with()
+        fake_context.load_verify_locations.assert_called_once_with(cadata="PEM")
 
     def test_svg_style_classification(self):
         outline = b'<svg fill="none" stroke="currentColor"><path d="M0 0"/></svg>'

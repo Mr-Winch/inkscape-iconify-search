@@ -91,7 +91,9 @@ which can produce `CERTIFICATE_VERIFY_FAILED` even when Iconify opens normally i
 a browser. The extension now tries, in order:
 
 1. Inkscape Python's verified HTTPS connection
-2. A verified TLS context populated from the Windows certificate stores
+2. A verified TLS context populated from the Windows certificate stores,
+   including a native CryptoAPI reader for Inkscape builds compiled without
+   `ssl.enum_certificates`
 3. Windows `curl.exe` with HTTPS-only, TLS 1.2-or-newer verification
 
 Certificate verification is never disabled. Search terms and selected icon names
