@@ -1,7 +1,9 @@
-# Inkscape Icon Importer
+# Iconify Search for Inkscape
 
 Search Iconify's open-source icon catalog and insert an icon directly into the
 current Inkscape document as editable SVG or embedded PNG.
+
+Current public version: **0.6.3**
 
 ## Features
 
@@ -37,10 +39,10 @@ SVG import does not start another process.
 
 ## Install on Windows
 
-1. Extract `inkscape-icon-importer.zip` completely.
+1. Download and extract `inkscape-iconify-search-v0.6.3.zip` completely.
 2. Double-click `install.cmd`.
 3. Close every Inkscape window and reopen Inkscape.
-4. Choose **Extensions → Import/Export → Search and Import Icons**.
+4. Choose **Extensions → Import/Export → Search and Import Icons 0.6.3**.
 
 The installer copies the extension to:
 
@@ -50,6 +52,15 @@ The installer copies the extension to:
 
 Rerun `install.cmd` to upgrade an existing installation; it overwrites the old
 extension files while retaining the cache.
+
+## Uninstall on Windows
+
+1. Close every Inkscape window.
+2. Double-click `uninstall.cmd` in the extracted release folder.
+3. Type **Y** when prompted, then reopen Inkscape.
+
+Manual alternative: remove `%APPDATA%\inkscape\extensions\icon-importer` and
+restart Inkscape. The uninstaller removes only this extension's user folder.
 
 ## Manual installation
 
@@ -109,6 +120,9 @@ $env:ICON_IMPORTER_TEST_TMP = 'C:\tmp'
 python -m unittest discover -s tests -v
 python tools/package_extension.py
 ```
+
+The package command creates a versioned ZIP and a matching `.sha256` checksum
+file under `dist`. It does not modify or remove historical packages.
 
 The GTK/Inkscape integration must be exercised inside an Inkscape extension
 environment. The project deliberately runs against the `inkex` version bundled

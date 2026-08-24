@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
-  <name>Search and Import Icons</name>
+  <name>Search and Import Icons 0.6.3</name>
   <id>com.wintondiaz.inkscape.icon-importer</id>
 
   <dependency type="executable" location="inx" interpreter="python">icon_importer_extension.py</dependency>

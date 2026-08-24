@@ -1,17 +1,17 @@
 @echo off
 setlocal
-title Install Icon Importer for Inkscape
+title Install Iconify Search 0.6.3 for Inkscape
 set "SOURCE=%~dp0"
 set "TARGET=%APPDATA%\inkscape\extensions\icon-importer"
 set "PACKAGE_SOURCE=%SOURCE%icon_importer"
 set "PACKAGE_TARGET=%TARGET%\icon_importer"
 
 echo.
-echo  Icon Importer for Inkscape
-echo  --------------------------
+echo  Iconify Search 0.6.3 for Inkscape
+echo  ---------------------------------
 echo.
 
-for %%F in (icon_importer.inx icon_importer_extension.py iconify_search_icon.svg README.md LICENSE) do if not exist "%SOURCE%%%F" goto missing
+for %%F in (icon_importer.inx icon_importer_extension.py iconify_search_icon.svg uninstall.cmd README.md CHANGELOG.md LICENSE) do if not exist "%SOURCE%%%F" goto missing
 for %%F in (__init__.py api.py cache.py favorites.py models.py svg.py ui.py) do if not exist "%PACKAGE_SOURCE%\%%F" goto missing
 
 if not exist "%TARGET%" mkdir "%TARGET%"
@@ -33,10 +33,12 @@ echo  Installation complete!
 echo.
 echo  1. Close every Inkscape window.
 echo  2. Reopen Inkscape.
-echo  3. Choose Extensions ^> Import/Export ^> Search and Import Icons.
+echo  3. Choose Extensions ^> Import/Export ^> Search and Import Icons 0.6.3.
 echo.
 echo  Installed in:
 echo  %TARGET%
+echo.
+echo  To uninstall, run uninstall.cmd from the extracted release folder.
 echo.
 pause
 exit /b 0
