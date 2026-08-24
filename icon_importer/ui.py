@@ -15,6 +15,7 @@ gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Pango", "1.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # noqa: E402
 
+from . import __version__
 from .api import IconifyClient
 from .favorites import (
     add_icon,
@@ -34,7 +35,7 @@ class IconBrowserDialog(Gtk.Dialog):
     COL_CATEGORY, COL_PALETTE, COL_LICENSE, COL_HEIGHT = range(4, 8)
 
     def __init__(self, client: IconifyClient):
-        super().__init__(title="Iconify — Search and Import Icons")
+        super().__init__(title=f"Iconify — Search and Import Icons {__version__}")
         self.client = client
         self.executor = ThreadPoolExecutor(max_workers=7)
         self.collections = ()
@@ -279,7 +280,7 @@ class IconBrowserDialog(Gtk.Dialog):
         brand.set_valign(Gtk.Align.CENTER)
         header.pack_start(brand, False, False, 0)
         title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
-        title = Gtk.Label(label="Iconify Search")
+        title = Gtk.Label(label=f"Iconify Search {__version__}")
         title.set_xalign(0)
         title.get_style_context().add_class("icon-title")
         subtitle = Gtk.Label(
