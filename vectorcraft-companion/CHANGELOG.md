@@ -7,6 +7,7 @@
 - Added VectorCraft launching, connection diagnostics, and theme synchronization with Windows fallback.
 - Added non-overlapping composition for multiple selected icons.
 - Added persistent preview zoom and adapted the complete Iconify picker, filters, and grouped favorites.
+- Fixed missing result thumbnails by loading, sanitizing, and caching SVG previews through the same resilient Iconify API connection used by search.
 - Added an assisted NSIS installer with desktop and Start menu shortcuts and standard Windows uninstallation.
 - Added protocol composition and package-integrity tests.
 

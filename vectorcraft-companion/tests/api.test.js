@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildIconUrl, IconifyApi, parseIconName } from "../src/iconify-api.js";
+import { buildIconUrl, IconifyApi, parseIconName, svgDataUrl } from "../src/iconify-api.js";
 
 test("parses Iconify names", () => assert.deepEqual(parseIconName("lucide:camera"), { prefix: "lucide", name: "camera" }));
 test("rejects malformed Iconify names", () => assert.throws(() => parseIconName("not an icon")));
@@ -9,6 +9,13 @@ test("builds encoded API URLs", () => {
   assert.equal(url.pathname, "/lucide/camera.svg");
   assert.equal(url.searchParams.get("color"), "#ff00aa");
   assert.equal(url.searchParams.get("width"), "48");
+});
+
+test("encodes fetched SVG previews as local data URLs", () => {
+  const source = '<svg xmlns="http://www.w3.org/2000/svg"><text>Á &amp; ✓</text></svg>';
+  const url = svgDataUrl(source);
+  assert.match(url, /^data:image\/svg\+xml;charset=utf-8,/);
+  assert.equal(decodeURIComponent(url.split(",", 2)[1]), source);
 });
 
 test("sends advanced Iconify search filters", async () => {

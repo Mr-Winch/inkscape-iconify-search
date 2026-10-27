@@ -119,6 +119,10 @@ export function sanitizeSvg(svgText) {
   return new XMLSerializer().serializeToString(svg);
 }
 
+export function svgDataUrl(svgText) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+}
+
 export async function svgToPngBlob(svgText, pixels = 512) {
   const safeSvg = sanitizeSvg(svgText);
   const source = URL.createObjectURL(new Blob([safeSvg], { type: "image/svg+xml" }));

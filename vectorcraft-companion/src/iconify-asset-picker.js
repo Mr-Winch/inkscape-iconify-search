@@ -1,4 +1,4 @@
-import { IconifyApi, buildIconUrl, sanitizeSvg, svgToPngBlob } from "./iconify-api.js";
+import { IconifyApi, sanitizeSvg, svgDataUrl, svgToPngBlob } from "./iconify-api.js";
 import { addFavorite, createFavoriteSection, favoriteCount, isFavorite, normalizeFavorites, removeFavorite, removeFavoriteSection } from "./favorites.js";
 import { styles } from "./styles.js";
 
@@ -44,6 +44,7 @@ export class IconifyAssetPicker extends HTMLElement {
     this.searchController = null;
     this.loading = false;
     this.collectionBrowse = null;
+    this.previewCache = new Map();
   }
 
   get storageKey() { return this.getAttribute("storage-key") || "iconify-asset-picker"; }
@@ -133,10 +134,46 @@ export class IconifyAssetPicker extends HTMLElement {
 
   previewColor() { return this.getAttribute("data-resolved-theme") === "dark" ? "#ffffff" : this.color; }
 
-  previewUrl(name) {
+  previewOptions(name) {
     const prefix = name.split(":", 1)[0];
     const collection = this.collections.find((item) => item.prefix === prefix);
-    return buildIconUrl(name, { color: collection?.palette ? "" : this.previewColor() });
+    return { color: collection?.palette ? "" : this.previewColor() };
+  }
+
+  previewDataUrl(name) {
+    const options = this.previewOptions(name);
+    const key = `${name}|${options.color || "original"}`;
+    if (!this.previewCache.has(key)) {
+      const request = this.api.svg(name, options)
+        .then((svg) => svgDataUrl(sanitizeSvg(svg)))
+        .catch((error) => {
+          this.previewCache.delete(key);
+          throw error;
+        });
+      this.previewCache.set(key, request);
+    }
+    return this.previewCache.get(key);
+  }
+
+  hydratePreviews(scope) {
+    const images = [...scope.querySelectorAll("img[data-preview-icon]")];
+    let next = 0;
+    const worker = async () => {
+      while (next < images.length) {
+        const image = images[next++];
+        const name = image.dataset.previewIcon;
+        try {
+          const source = await this.previewDataUrl(name);
+          if (image.isConnected && image.dataset.previewIcon === name) {
+            image.src = source;
+            image.closest(".icon-card, .mini")?.classList.add("preview-ready");
+          }
+        } catch {
+          if (image.isConnected) image.closest(".icon-card, .mini")?.classList.add("preview-error");
+        }
+      }
+    };
+    void Promise.all(Array.from({ length: Math.min(6, images.length) }, worker));
   }
 
   advancedFiltersActive() {
@@ -258,9 +295,10 @@ export class IconifyAssetPicker extends HTMLElement {
     const content = root.querySelector(".side-content");
     if (this.activeTab === "favorites") {
       if (!this.favorites.sections.length) { content.innerHTML = '<div class="favorites-empty">Use the ☆ button on any icon to create your first favorites section.</div>'; return; }
-      content.innerHTML = this.favorites.sections.map((section) => `<details class="favorite-section" data-section="${escapeHtml(section.id)}"><summary><span>${escapeHtml(section.name)} <small>(${section.icons.length})</small></span><button class="trash icon-button" type="button" title="Delete section" aria-label="Delete ${escapeHtml(section.name)}">${svgIcon("trash")}</button></summary><div class="favorite-icons">${section.icons.map((name) => `<button class="mini" type="button" data-icon="${escapeHtml(name)}" title="${escapeHtml(name)}"><img alt="" src="${this.previewUrl(name)}"><span class="remove" data-remove="${escapeHtml(name)}" aria-label="Remove ${escapeHtml(name)}">${svgIcon("close")}</span></button>`).join("") || '<span class="favorites-empty">Empty</span>'}</div></details>`).join("");
+      content.innerHTML = this.favorites.sections.map((section) => `<details class="favorite-section" data-section="${escapeHtml(section.id)}"><summary><span>${escapeHtml(section.name)} <small>(${section.icons.length})</small></span><button class="trash icon-button" type="button" title="Delete section" aria-label="Delete ${escapeHtml(section.name)}">${svgIcon("trash")}</button></summary><div class="favorite-icons">${section.icons.map((name) => `<button class="mini" type="button" data-icon="${escapeHtml(name)}" title="${escapeHtml(name)}"><img alt="" data-preview-icon="${escapeHtml(name)}"><span class="remove" data-remove="${escapeHtml(name)}" aria-label="Remove ${escapeHtml(name)}">${svgIcon("close")}</span></button>`).join("") || '<span class="favorites-empty">Empty</span>'}</div></details>`).join("");
       content.querySelectorAll(".trash").forEach((button) => button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); const details = button.closest("details"); if (confirm(`Delete the favorites section “${details.querySelector("summary span").textContent.replace(/ \(\d+\)$/, "")}”?`)) { this.favorites = removeFavoriteSection(this.favorites, details.dataset.section); this.saveFavorites(); this.renderDynamic(); } }));
       content.querySelectorAll(".mini").forEach((button) => button.addEventListener("click", (event) => { const details = button.closest("details"); if (event.target.closest(".remove")) { this.favorites = removeFavorite(this.favorites, details.dataset.section, button.dataset.icon); this.saveFavorites(); this.renderDynamic(); } else { this.toggleSelection(button.dataset.icon); } }));
+      this.hydratePreviews(content);
       return;
     }
     const categories = [...new Set(this.collections.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -298,8 +336,9 @@ export class IconifyAssetPicker extends HTMLElement {
     if (this.loading) { container.className = "results empty"; container.innerHTML = `<div><div class="empty-icon loading-icon">${svgIcon("loading")}</div><strong>Searching…</strong></div>`; return; }
     if (!this.results.length) { container.className = "results empty"; container.innerHTML = `<div><div class="empty-icon">${svgIcon("search")}</div><strong>Search the Iconify catalog</strong><div>Enter at least two characters to begin.</div></div>`; return; }
     container.className = "results icon-grid";
-    container.innerHTML = this.results.map((name) => { const saved = isFavorite(this.favorites, name); return `<button type="button" class="icon-card ${this.selected.has(name) ? "selected" : ""}" data-icon="${escapeHtml(name)}" aria-pressed="${this.selected.has(name)}" title="${escapeHtml(name)}"><span class="star ${saved ? "saved" : ""}" role="button" aria-label="Add ${escapeHtml(name)} to favorites" title="Add to favorites">${svgIcon(saved ? "starSaved" : "star")}</span><img alt="" loading="lazy" src="${this.previewUrl(name)}"><span class="icon-name">${escapeHtml(iconLabel(name))}</span></button>`; }).join("");
+    container.innerHTML = this.results.map((name) => { const saved = isFavorite(this.favorites, name); return `<button type="button" class="icon-card ${this.selected.has(name) ? "selected" : ""}" data-icon="${escapeHtml(name)}" aria-pressed="${this.selected.has(name)}" title="${escapeHtml(name)}"><span class="star ${saved ? "saved" : ""}" role="button" aria-label="Add ${escapeHtml(name)} to favorites" title="Add to favorites">${svgIcon(saved ? "starSaved" : "star")}</span><img alt="" loading="lazy" data-preview-icon="${escapeHtml(name)}"><span class="icon-name">${escapeHtml(iconLabel(name))}</span></button>`; }).join("");
     container.querySelectorAll(".icon-card").forEach((card) => card.addEventListener("click", (event) => event.target.closest(".star") ? this.openFavoriteDialog(card.dataset.icon) : this.toggleSelection(card.dataset.icon)));
+    this.hydratePreviews(container);
   }
 
   renderOptions() {
