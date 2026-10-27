@@ -5,6 +5,10 @@ current Inkscape document as editable SVG or embedded PNG.
 
 Current public version: **0.6.3**
 
+## Other editions
+
+- [Iconify Search for VectorCraft](./vectorcraft-companion/README.md) — a self-contained Windows companion that starts VectorCraft with its documented control port and places selected SVG icons directly in the active document. Its installer and checksum are published with the VectorCraft release.
+
 ## Features
 
 - Loads the complete collection catalog dynamically from Iconify (231 collections

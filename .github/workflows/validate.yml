@@ -35,3 +35,18 @@ jobs:
           $expected = (Get-Content "$($archive.FullName).sha256").Split()[0]
           $actual = (Get-FileHash $archive.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actual -ne $expected) { throw "SHA-256 mismatch" }
+
+  vectorcraft-companion:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: vectorcraft-companion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: vectorcraft-companion/package-lock.json
+      - run: npm ci
+      - run: npm test

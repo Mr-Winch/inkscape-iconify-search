@@ -1,0 +1,75 @@
+{
+  "name": "iconify-search-vectorcraft",
+  "version": "1.0.0",
+  "description": "Search Iconify and place editable SVG icons directly into VectorCraft.",
+  "author": "Winton Diaz Dauhajre <Mr-Winch@users.noreply.github.com>",
+  "type": "module",
+  "main": "CODEX_main.cjs",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mr-Winch/iconify-search-vectorcraft.git"
+  },
+  "homepage": "https://github.com/Mr-Winch/iconify-search-vectorcraft",
+  "bugs": "https://github.com/Mr-Winch/iconify-search-vectorcraft/issues",
+  "scripts": {
+    "test": "node --test",
+    "icon": "node scripts/CODEX_generate_icon.cjs",
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "dist:dir": "electron-builder --win dir"
+  },
+  "keywords": [
+    "iconify",
+    "icons",
+    "vectorcraft",
+    "svg",
+    "design"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0",
+    "sharp": "^0.35.5"
+  },
+  "build": {
+    "appId": "com.mrwinch.iconifysearch.vectorcraft",
+    "productName": "Iconify Search for VectorCraft",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "CODEX_main.cjs",
+      "CODEX_preload.cjs",
+      "CODEX_vectorcraft_protocol.cjs",
+      "CODEX_vectorcraft_app.js",
+      "index.html",
+      "vectorcraft.css",
+      "src/**/*",
+      "assets/**/*",
+      "LICENSE"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/iconify_search_icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Iconify Search for VectorCraft",
+      "uninstallDisplayName": "Iconify Search for VectorCraft",
+      "artifactName": "Iconify-Search-for-VectorCraft-Setup-${version}.${ext}"
+    }
+  }
+}

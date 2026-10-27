@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://api.iconify.design https://api.simplesvg.com https://api.unisvg.com; connect-src https://api.iconify.design https://api.simplesvg.com https://api.unisvg.com; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>Iconify Search for VectorCraft</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/iconify_search_icon.svg">
+  <link rel="stylesheet" href="./vectorcraft.css">
+</head>
+<body>
+  <div class="window-shell">
+    <header class="app-header">
+      <div class="brand">
+        <img src="./assets/iconify_search_icon.svg" alt="">
+        <div><h1>Iconify Search</h1><p>Find and place icons in VectorCraft</p></div>
+      </div>
+      <div class="connection" aria-live="polite">
+        <span class="connection-dot" aria-hidden="true"></span>
+        <div class="connection-copy"><strong id="connection-label">Checking VectorCraft…</strong><span id="connection-detail">Control port 7979</span></div>
+        <button id="connect-button" class="secondary" type="button">Connect</button>
+        <button id="theme-button" class="icon-button secondary" type="button" title="Switch theme" aria-label="Switch theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+    </header>
+    <div id="connection-notice" class="notice" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v6m0 4h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <div><strong id="notice-title">VectorCraft is not connected</strong><span id="notice-copy">Open it through this app to enable direct placement.</span></div>
+      <button id="launch-button" class="primary" type="button">Open VectorCraft</button>
+    </div>
+    <main class="picker-region"><iconify-asset-picker embedded theme="auto" storage-key="iconify-vectorcraft" action-label="Insert"></iconify-asset-picker></main>
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  </div>
+  <script type="module" src="./CODEX_vectorcraft_app.js"></script>
+</body>
+</html>

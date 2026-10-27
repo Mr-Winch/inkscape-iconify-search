@@ -1,0 +1,13 @@
+.DS_Store
+.github/
+examples/
+INTEGRATION.md
+scripts/package-release.mjs
+node_modules/
+.npm-cache/
+coverage/
+dist/
+release/
+release-assets/
+*.log
+*.tgz
