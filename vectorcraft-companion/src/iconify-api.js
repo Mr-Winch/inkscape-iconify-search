@@ -5,6 +5,15 @@ export const DEFAULT_ENDPOINTS = [
 ];
 
 const ICON_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ICON_PART = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const wait = (milliseconds, signal) => new Promise((resolve, reject) => {
+  const timer = setTimeout(resolve, milliseconds);
+  signal?.addEventListener("abort", () => {
+    clearTimeout(timer);
+    reject(signal.reason || new DOMException("Aborted", "AbortError"));
+  }, { once: true });
+});
 
 export function parseIconName(fullName) {
   if (!ICON_NAME.test(fullName)) throw new Error(`Invalid Iconify name: ${fullName}`);
@@ -28,16 +37,28 @@ async function fetchWithFailover(path, params, endpoints, signal) {
     for (const [key, value] of Object.entries(params || {})) {
       if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
     }
-    try {
-      const response = await fetch(url, {
-        headers: { Accept: "application/json,image/svg+xml;q=0.9,*/*;q=0.1" },
-        signal
-      });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      return response;
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      errors.push(`${endpoint}: ${error.message}`);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: "application/json,image/svg+xml;q=0.9,*/*;q=0.1" },
+          signal
+        });
+        if (response.ok) return response;
+        if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+          const retrySeconds = Number(response.headers.get("retry-after"));
+          await wait(Number.isFinite(retrySeconds) ? Math.min(5000, retrySeconds * 1000) : 350 * (attempt + 1), signal);
+          continue;
+        }
+        throw new Error(`${response.status} ${response.statusText}`);
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        if (attempt < 2 && error instanceof TypeError) {
+          await wait(250 * (attempt + 1), signal);
+          continue;
+        }
+        errors.push(`${endpoint}: ${error.message}`);
+        break;
+      }
     }
   }
   throw new Error(`Iconify request failed. ${errors.join(" · ")}`);
@@ -94,6 +115,14 @@ export class IconifyApi {
     };
   }
 
+  async iconSet(prefix, names, { signal } = {}) {
+    if (!ICON_PART.test(prefix)) throw new Error(`Invalid Iconify prefix: ${prefix}`);
+    const cleanNames = [...new Set(names)].filter((name) => ICON_PART.test(name));
+    if (!cleanNames.length) return { prefix, icons: {}, aliases: {} };
+    const response = await fetchWithFailover(`/${prefix}.json`, { icons: cleanNames.join(",") }, this.endpoints, signal);
+    return response.json();
+  }
+
   async svg(fullName, { color = "", signal } = {}) {
     const { prefix, name } = parseIconName(fullName);
     const response = await fetchWithFailover(`/${prefix}/${name}.svg`, { color }, this.endpoints, signal);
@@ -121,6 +150,18 @@ export function sanitizeSvg(svgText) {
 
 export function svgDataUrl(svgText) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+}
+
+export function iconSetSvg(iconSet, name, { color = "" } = {}) {
+  const icon = iconSet?.icons?.[name];
+  if (!icon || typeof icon.body !== "string") throw new Error(`Iconify batch did not include ${name}.`);
+  const number = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const left = number(icon.left, 0);
+  const top = number(icon.top, 0);
+  const width = number(icon.width, number(iconSet.width, 16));
+  const height = number(icon.height, number(iconSet.height, 16));
+  const body = /^#[0-9a-f]{3,8}$/i.test(color) ? icon.body.replace(/currentColor/gi, color) : icon.body;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="${left} ${top} ${width} ${height}">${body}</svg>`;
 }
 
 export async function svgToPngBlob(svgText, pixels = 512) {

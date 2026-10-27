@@ -1,6 +1,6 @@
 {
   "name": "iconify-search-vectorcraft",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Search Iconify and place editable SVG icons directly into VectorCraft.",
   "author": "Winton Diaz Dauhajre <Mr-Winch@users.noreply.github.com>",
   "type": "module",

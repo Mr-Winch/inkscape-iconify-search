@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 — 2026-10-27
+
+- Fixed incomplete result grids caused by Iconify rate limiting after many individual thumbnail requests.
+- Batched previews per icon collection and paced the remaining alias requests.
+- Added retries for transient HTTP 429 and server errors.
+- Verified all 120 results for the search “zoom”: 118 loaded from batches, 2 through fallback, 0 failed.
+
 ## 1.0.0 — 2026-10-27
 
 - Created a self-contained Windows companion for VectorCraft.
@@ -7,7 +14,7 @@
 - Added VectorCraft launching, connection diagnostics, and theme synchronization with Windows fallback.
 - Added non-overlapping composition for multiple selected icons.
 - Added persistent preview zoom and adapted the complete Iconify picker, filters, and grouped favorites.
-- Fixed missing result thumbnails by loading, sanitizing, and caching SVG previews through the same resilient Iconify API connection used by search.
+- Loaded, sanitized, and cached SVG previews locally instead of displaying remote SVG URLs directly.
 - Added an assisted NSIS installer with desktop and Start menu shortcuts and standard Windows uninstallation.
 - Added protocol composition and package-integrity tests.
 

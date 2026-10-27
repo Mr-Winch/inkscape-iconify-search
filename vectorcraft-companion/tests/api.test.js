@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildIconUrl, IconifyApi, parseIconName, svgDataUrl } from "../src/iconify-api.js";
+import { buildIconUrl, iconSetSvg, IconifyApi, parseIconName, svgDataUrl } from "../src/iconify-api.js";
 
 test("parses Iconify names", () => assert.deepEqual(parseIconName("lucide:camera"), { prefix: "lucide", name: "camera" }));
 test("rejects malformed Iconify names", () => assert.throws(() => parseIconName("not an icon")));
@@ -16,6 +16,27 @@ test("encodes fetched SVG previews as local data URLs", () => {
   const url = svgDataUrl(source);
   assert.match(url, /^data:image\/svg\+xml;charset=utf-8,/);
   assert.equal(decodeURIComponent(url.split(",", 2)[1]), source);
+});
+
+test("builds a colored SVG from an Iconify batch", () => {
+  const svg = iconSetSvg({ width: 24, height: 24, icons: { zoom: { body: '<path fill="currentColor" d="M0 0h24v24H0z"/>' } } }, "zoom", { color: "#ffffff" });
+  assert.match(svg, /viewBox="0 0 24 24"/);
+  assert.match(svg, /fill="#ffffff"/);
+});
+
+test("loads several previews in one Iconify request", async () => {
+  const originalFetch = globalThis.fetch;
+  let requested;
+  globalThis.fetch = async (url) => {
+    requested = new URL(url);
+    return new Response(JSON.stringify({ prefix: "demo", width: 24, height: 24, icons: { one: { body: "<path/>" }, two: { body: "<circle/>" } } }), { status: 200 });
+  };
+  try {
+    const result = await new IconifyApi({ endpoints: ["https://example.test"] }).iconSet("demo", ["one", "two"]);
+    assert.equal(requested.pathname, "/demo.json");
+    assert.equal(requested.searchParams.get("icons"), "one,two");
+    assert.deepEqual(Object.keys(result.icons), ["one", "two"]);
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test("sends advanced Iconify search filters", async () => {

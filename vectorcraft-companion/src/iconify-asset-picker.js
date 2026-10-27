@@ -1,8 +1,8 @@
-import { IconifyApi, sanitizeSvg, svgDataUrl, svgToPngBlob } from "./iconify-api.js";
+import { IconifyApi, iconSetSvg, sanitizeSvg, svgDataUrl, svgToPngBlob } from "./iconify-api.js";
 import { addFavorite, createFavoriteSection, favoriteCount, isFavorite, normalizeFavorites, removeFavorite, removeFavoriteSection } from "./favorites.js";
 import { styles } from "./styles.js";
 
-export const VERSION = "1.0.0";
+export const VERSION = "1.0.1";
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const iconLabel = (name) => name.includes(":") ? name.slice(name.indexOf(":") + 1) : name;
 const APP_ICON_URL = new URL("../assets/iconify_search_icon.svg", import.meta.url).href;
@@ -45,6 +45,7 @@ export class IconifyAssetPicker extends HTMLElement {
     this.loading = false;
     this.collectionBrowse = null;
     this.previewCache = new Map();
+    this.previewQueue = Promise.resolve();
   }
 
   get storageKey() { return this.getAttribute("storage-key") || "iconify-asset-picker"; }
@@ -157,23 +158,48 @@ export class IconifyAssetPicker extends HTMLElement {
 
   hydratePreviews(scope) {
     const images = [...scope.querySelectorAll("img[data-preview-icon]")];
-    let next = 0;
-    const worker = async () => {
-      while (next < images.length) {
-        const image = images[next++];
-        const name = image.dataset.previewIcon;
-        try {
-          const source = await this.previewDataUrl(name);
-          if (image.isConnected && image.dataset.previewIcon === name) {
-            image.src = source;
-            image.closest(".icon-card, .mini")?.classList.add("preview-ready");
-          }
-        } catch {
-          if (image.isConnected) image.closest(".icon-card, .mini")?.classList.add("preview-error");
+    const groups = new Map();
+    for (const image of images) {
+      const name = image.dataset.previewIcon;
+      const prefix = name.split(":", 1)[0];
+      const color = this.previewOptions(name).color;
+      const key = `${prefix}|${color || "original"}`;
+      if (!groups.has(key)) groups.set(key, { prefix, color, images: [] });
+      groups.get(key).images.push(image);
+    }
+    this.previewQueue = this.previewQueue.then(async () => {
+      for (const group of groups.values()) {
+        const names = [...new Set(group.images.map((image) => image.dataset.previewIcon))];
+        const missing = names.filter((name) => !this.previewCache.has(`${name}|${group.color || "original"}`));
+        if (missing.length) {
+          try {
+            const localNames = missing.map((name) => name.slice(name.indexOf(":") + 1));
+            const iconSet = await this.api.iconSet(group.prefix, localNames);
+            for (const name of missing) {
+              const localName = name.slice(name.indexOf(":") + 1);
+              try {
+                const source = svgDataUrl(sanitizeSvg(iconSetSvg(iconSet, localName, { color: group.color })));
+                this.previewCache.set(`${name}|${group.color || "original"}`, Promise.resolve(source));
+              } catch { /* Aliases and incomplete batches fall back to the SVG endpoint below. */ }
+            }
+          } catch { /* A failed batch falls back to paced individual requests below. */ }
         }
+        for (const image of group.images) {
+          const name = image.dataset.previewIcon;
+          if (!image.isConnected) continue;
+          try {
+            const source = await this.previewDataUrl(name);
+            if (image.isConnected && image.dataset.previewIcon === name) {
+              image.src = source;
+              image.closest(".icon-card, .mini")?.classList.add("preview-ready");
+            }
+          } catch {
+            if (image.isConnected) image.closest(".icon-card, .mini")?.classList.add("preview-error");
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 35));
       }
-    };
-    void Promise.all(Array.from({ length: Math.min(6, images.length) }, worker));
+    }).catch(() => {});
   }
 
   advancedFiltersActive() {
