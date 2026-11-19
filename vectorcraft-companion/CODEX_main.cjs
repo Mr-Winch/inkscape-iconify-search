@@ -3,6 +3,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
+const { assetFilename, saveAssetFile, saveAssetFiles } = require("./CODEX_downloads.cjs");
 const { composeSvg } = require("./CODEX_vectorcraft_protocol.cjs");
 
 const CONTROL_HOST = "127.0.0.1";
@@ -136,6 +137,30 @@ async function placeAssets(assets) {
   return { count: assets.length, result };
 }
 
+async function downloadAssets(assets) {
+  if (!Array.isArray(assets) || !assets.length) throw new Error("No icons were selected for download.");
+  if (assets.length === 1) {
+    const asset = assets[0];
+    const format = String(asset.format || "").toLowerCase();
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: `Save ${format.toUpperCase()} icon`,
+      defaultPath: path.join(app.getPath("downloads"), assetFilename(asset)),
+      filters: [{ name: format === "png" ? "PNG image" : "SVG image", extensions: [format] }]
+    });
+    if (result.canceled || !result.filePath) return { cancelled: true, count: 0, paths: [] };
+    const savedPath = await saveAssetFile(result.filePath, asset);
+    return { cancelled: false, count: 1, paths: [savedPath], directory: path.dirname(savedPath) };
+  }
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: `Choose a folder for ${assets.length} icons`,
+    defaultPath: app.getPath("downloads"),
+    properties: ["openDirectory", "createDirectory"]
+  });
+  if (result.canceled || !result.filePaths[0]) return { cancelled: true, count: 0, paths: [] };
+  const paths = await saveAssetFiles(result.filePaths[0], assets);
+  return { cancelled: false, count: paths.length, paths, directory: result.filePaths[0] };
+}
+
 function themeFromInspection(inspection) {
   const candidates = [inspection?.brightness, inspection?.ui?.brightness, inspection?.theme, inspection?.ui?.theme];
   for (const value of candidates) {
@@ -175,6 +200,7 @@ function createWindow() {
 ipcMain.handle("vectorcraft:status", connectionStatus);
 ipcMain.handle("vectorcraft:launch", launchVectorCraft);
 ipcMain.handle("vectorcraft:place", (_event, assets) => placeAssets(assets));
+ipcMain.handle("vectorcraft:download", (_event, assets) => downloadAssets(assets));
 ipcMain.handle("vectorcraft:theme", async () => {
   try { return { theme: themeFromInspection(await controlRequest("ui.inspect", {}, 2500)), source: "vectorcraft" }; }
   catch { return { theme: nativeTheme.shouldUseDarkColors ? "dark" : "light", source: "windows" }; }

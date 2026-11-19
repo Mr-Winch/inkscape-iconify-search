@@ -2,11 +2,11 @@
 
 Iconify Search for VectorCraft is a Windows companion that searches the [Iconify](https://iconify.design/) catalog and places editable SVG artwork directly in the active VectorCraft document.
 
-Current version: **1.0.1**.
+Current version: **1.1.0**.
 
 ## Install
 
-1. Download [Iconify-Search-for-VectorCraft-Setup-1.0.1.exe](https://github.com/Mr-Winch/inkscape-iconify-search/releases/download/vectorcraft-v1.0.1/Iconify-Search-for-VectorCraft-Setup-1.0.1.exe).
+1. Download [Iconify-Search-for-VectorCraft-Setup-1.1.0.exe](https://github.com/Mr-Winch/inkscape-iconify-search/releases/download/vectorcraft-v1.1.0/Iconify-Search-for-VectorCraft-Setup-1.1.0.exe).
 2. Run the installer. It creates Start menu and desktop shortcuts.
 3. Open **Iconify Search for VectorCraft**.
 4. Press **Open VectorCraft** so VectorCraft starts with its local control port enabled.
@@ -25,6 +25,7 @@ If VectorCraft is already running without its control port, close all VectorCraf
 - Filter by collection, category, palette, style, license, native grid, icon category, aliases, hidden icons, offset, and result limit.
 - Select or deselect individual icons, clear all, and insert several icons at once.
 - Multiple icons are arranged into one editable SVG group instead of overlapping in the center of the document.
+- Download one selected icon with a native Save dialog or many selected icons into one chosen folder, in SVG or PNG.
 - Named Favorites sections that start collapsed; remove individual icons or whole sections.
 - Persistent favorites, filters, collection, result limit, icon color, import size, format, and preview zoom.
 - Light and dark themes. Automatic mode follows VectorCraft when its brightness is reported, then falls back to Windows.

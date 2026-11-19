@@ -112,7 +112,8 @@ button:disabled { cursor: default; opacity: .5; }
 .format { display: flex; border: 1px solid var(--iap-border); border-radius: 7px; overflow: hidden; }
 .format button { border: 0; border-radius: 0; min-height: 34px; padding: 5px 10px; }
 .format button.active { background: var(--iap-accent); color: var(--iap-accent-text); }
-.actions { display: flex; gap: 8px; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.download { font-weight: 600; }
 dialog { width: min(390px, calc(100% - 30px)); border: 1px solid var(--iap-border); border-radius: 11px; padding: 0; color: var(--iap-text); background: var(--iap-bg); box-shadow: 0 18px 55px #0006; }
 dialog::backdrop { background: #0007; }
 .dialog-content { padding: 18px; }

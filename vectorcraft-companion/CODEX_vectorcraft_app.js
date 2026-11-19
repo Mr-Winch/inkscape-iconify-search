@@ -119,6 +119,26 @@ picker.addEventListener("iconify-import", async ({ detail }) => {
   }
 });
 
+picker.addEventListener("iconify-download", async ({ detail }) => {
+  try {
+    const assets = await Promise.all(detail.assets.map(async (asset) => ({
+      name: asset.name,
+      format: asset.format,
+      data: await asset.blob.arrayBuffer()
+    })));
+    const result = await window.vectorCraft.download(assets);
+    if (result.cancelled) {
+      picker.setStatus("Download cancelled.");
+      return;
+    }
+    picker.setStatus(`${result.count} icon${result.count === 1 ? "" : "s"} saved to ${result.directory}.`);
+    toast(result.count === 1 ? "Icon saved to disk." : `${result.count} icons saved to disk.`);
+  } catch (error) {
+    picker.setStatus(`Download failed: ${error.message}`);
+    toast(error.message, "error");
+  }
+});
+
 picker.addEventListener("iconify-error", ({ detail }) => toast(detail.error.message, "error"));
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (manualTheme === "auto") syncTheme(); });
 applyTheme(manualTheme);

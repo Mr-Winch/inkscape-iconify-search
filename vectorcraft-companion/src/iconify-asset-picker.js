@@ -2,7 +2,7 @@ import { IconifyApi, iconSetSvg, sanitizeSvg, svgDataUrl, svgToPngBlob } from ".
 import { addFavorite, createFavoriteSection, favoriteCount, isFavorite, normalizeFavorites, removeFavorite, removeFavoriteSection } from "./favorites.js";
 import { styles } from "./styles.js";
 
-export const VERSION = "1.0.1";
+export const VERSION = "1.1.0";
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const iconLabel = (name) => name.includes(":") ? name.slice(name.indexOf(":") + 1) : name;
 const APP_ICON_URL = new URL("../assets/iconify_search_icon.svg", import.meta.url).href;
@@ -112,7 +112,7 @@ export class IconifyAssetPicker extends HTMLElement {
           <div class="compact"><label for="asset-size">Asset size</label><input id="asset-size" name="size" type="number" min="8" max="2048" step="8"></div>
           <div class="compact png-option"><label for="png-pixels">PNG pixels</label><input id="png-pixels" name="pngPixels" type="number" min="16" max="4096" step="16"></div>
           <div class="compact"><label for="asset-color">Icon color</label><input id="asset-color" name="color" type="color"></div>
-        </div><div class="actions"><button class="clear footer-clear" type="button" disabled>Clear all</button><button class="primary import" type="button" disabled>Import selected</button></div></footer>
+        </div><div class="actions"><button class="clear footer-clear" type="button" disabled>Clear all</button><button class="download" type="button" disabled>Download selected</button><button class="primary import" type="button" disabled>Import selected</button></div></footer>
       </section>
       <dialog><form class="dialog-content" method="dialog"><h2>Add to favorites</h2><p class="dialog-icon"></p><div class="field"><label for="favorite-section">Existing section</label><select id="favorite-section" name="favoriteSection"></select></div><div class="field"><label for="new-section">Or create a section</label><input id="new-section" name="newSection" maxlength="60" placeholder="e.g. Navigation"></div><div class="dialog-error error" role="alert"></div><div class="dialog-actions"><button value="cancel">Cancel</button><button class="primary save-favorite" value="default">Save</button></div></form></dialog>`;
     this.renderDynamic();
@@ -129,6 +129,7 @@ export class IconifyAssetPicker extends HTMLElement {
     root.querySelector('[name="pngPixels"]').addEventListener("change", (event) => { this.pngPixels = Math.max(16, Math.min(4096, Number(event.target.value) || 512)); this.savePreferences(); });
     root.querySelector('[name="color"]').addEventListener("input", (event) => { this.color = event.target.value; this.savePreferences(); this.renderResults(); });
     root.querySelector('[name="zoom"]').addEventListener("input", (event) => { this.zoom = Math.max(36, Math.min(88, Number(event.target.value) || 52)); this.savePreferences(); this.applyZoom(); });
+    root.querySelector(".download").addEventListener("click", () => this.downloadSelected());
     root.querySelector(".import").addEventListener("click", () => this.importSelected());
     root.querySelector("dialog form").addEventListener("submit", (event) => this.saveFavoriteFromDialog(event));
   }
@@ -392,8 +393,10 @@ export class IconifyAssetPicker extends HTMLElement {
   updateSelection() {
     if (!this.shadowRoot.querySelector(".import")) return;
     this.shadowRoot.querySelectorAll(".clear").forEach((button) => button.disabled = !this.selected.size);
+    this.shadowRoot.querySelector(".download").disabled = !this.selected.size || this.loading;
     this.shadowRoot.querySelector(".import").disabled = !this.selected.size || this.loading;
     const verb = this.getAttribute("action-label") || "Import";
+    this.shadowRoot.querySelector(".download").textContent = this.selected.size ? `Download ${this.selected.size}` : "Download selected";
     this.shadowRoot.querySelector(".import").textContent = this.selected.size ? `${verb} ${this.selected.size}` : `${verb} selected`;
     this.dispatchEvent(new CustomEvent("iconify-selection-change", { bubbles: true, composed: true, detail: { icons: [...this.selected] } }));
   }
@@ -425,23 +428,54 @@ export class IconifyAssetPicker extends HTMLElement {
     } catch (error) { form.querySelector(".dialog-error").textContent = error.message; }
   }
 
-  async importSelected() {
+  async prepareAssets(names) {
+    const texts = new Map();
+    const groups = new Map();
+    for (const name of names) {
+      const prefix = name.split(":", 1)[0];
+      if (!groups.has(prefix)) groups.set(prefix, []);
+      groups.get(prefix).push(name);
+    }
+    for (const [prefix, group] of groups) {
+      try {
+        const localNames = group.map((name) => name.slice(name.indexOf(":") + 1));
+        const iconSet = await this.api.iconSet(prefix, localNames);
+        for (const name of group) {
+          const localName = name.slice(name.indexOf(":") + 1);
+          try { texts.set(name, sanitizeSvg(iconSetSvg(iconSet, localName, { color: this.color }))); }
+          catch { /* Aliases fall through to the individual SVG endpoint. */ }
+        }
+      } catch { /* A failed batch falls through to paced individual SVG requests. */ }
+      for (const name of group) {
+        if (!texts.has(name)) texts.set(name, sanitizeSvg(await this.api.svg(name, { color: this.color })));
+      }
+    }
+    const assets = [];
+    for (const name of names) {
+      const text = texts.get(name);
+      const blob = this.format === "png" ? await svgToPngBlob(text, this.pngPixels) : new Blob([text], { type: "image/svg+xml" });
+      assets.push({ name, format: this.format, mimeType: blob.type, blob, text: this.format === "svg" ? text : undefined, size: this.size, color: this.color, source: "Iconify" });
+    }
+    return assets;
+  }
+
+  async runSelectedAction(eventName, actionLabel) {
     const names = [...this.selected];
     if (!names.length) return;
-    this.loading = true; this.updateSelection(); this.setStatus(`Preparing ${names.length} asset${names.length === 1 ? "" : "s"}…`);
+    this.loading = true; this.updateSelection(); this.setStatus(`Preparing ${names.length} ${this.format.toUpperCase()} icon${names.length === 1 ? "" : "s"} to ${actionLabel}…`);
     try {
-      const assets = [];
-      for (const name of names) {
-        const text = sanitizeSvg(await this.api.svg(name, { color: this.color }));
-        const blob = this.format === "png" ? await svgToPngBlob(text, this.pngPixels) : new Blob([text], { type: "image/svg+xml" });
-        assets.push({ name, format: this.format, mimeType: blob.type, blob, text: this.format === "svg" ? text : undefined, size: this.size, color: this.color, source: "Iconify" });
-      }
-      this.dispatchEvent(new CustomEvent("iconify-import", { bubbles: true, composed: true, detail: { assets } }));
-      this.setStatus(`${assets.length} asset${assets.length === 1 ? "" : "s"} ready for the host application.`);
+      const assets = await this.prepareAssets(names);
+      this.dispatchEvent(new CustomEvent(eventName, { bubbles: true, composed: true, detail: { assets } }));
+      this.setStatus(eventName === "iconify-download"
+        ? `Choose where to save ${assets.length} icon${assets.length === 1 ? "" : "s"}.`
+        : `${assets.length} asset${assets.length === 1 ? "" : "s"} ready for the host application.`);
       if (this.hasAttribute("clear-after-import")) this.clearSelection();
     } catch (error) { this.reportError(error); }
     finally { this.loading = false; this.updateSelection(); this.renderResults(); }
   }
+
+  downloadSelected() { return this.runSelectedAction("iconify-download", "download"); }
+  importSelected() { return this.runSelectedAction("iconify-import", "import"); }
 
   setStatus(message) { const status = this.shadowRoot.querySelector(".status"); if (status) { status.classList.remove("error"); status.textContent = message; } }
   reportError(error) { const status = this.shadowRoot.querySelector(".status"); if (status) { status.classList.add("error"); status.textContent = error.message; } this.dispatchEvent(new CustomEvent("iconify-error", { bubbles: true, composed: true, detail: { error } })); }

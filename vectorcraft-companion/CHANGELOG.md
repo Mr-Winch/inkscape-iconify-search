@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 — 2026-11-19
+
+- Added native disk downloads for selected icons in SVG or PNG.
+- Added a Save dialog for one icon and a folder picker for multiple icons.
+- Added safe, readable filenames and collision handling that never overwrites a multi-download silently.
+- Reused batched Iconify retrieval for importing and downloading large selections.
+
 ## 1.0.1 — 2026-10-27
 
 - Fixed incomplete result grids caused by Iconify rate limiting after many individual thumbnail requests.
